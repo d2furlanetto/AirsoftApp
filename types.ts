@@ -45,6 +45,7 @@ export interface Operator {
   rank: string;
   score: number;
   status: 'ONLINE' | 'OFFLINE' | 'KIA';
+  deviceId: string; // Vínculo com o hardware do jogador
   lastLat?: number;
   lastLng?: number;
   missionsProgress?: Record<string, MissionProgress>;

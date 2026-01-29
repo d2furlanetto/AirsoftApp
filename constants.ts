@@ -12,12 +12,17 @@ export const COLORS = {
  * Define o rank do operador com base na experiência (pontos) acumulada.
  */
 export const getRankByScore = (score: number): string => {
-  if (score >= 9600) return 'MAJOR';
-  if (score >= 4800) return 'CAPITÃO';
-  if (score >= 2400) return 'TENENTE';
-  if (score >= 1200) return 'SARGENTO';
-  if (score >= 600) return 'CABO';
-  if (score >= 300) return 'SOLDADO';
+  if (score >= 4000) return 'MARECHAL';
+  if (score >= 3500) return 'GENERAL';
+  if (score >= 3000) return 'CORONEL';
+  if (score >= 2500) return 'MAJOR';
+  if (score >= 2000) return 'CAPITÃO';
+  if (score >= 1500) return 'TENENTE';
+  if (score >= 1000) return 'ASPIRANTE';
+  if (score >= 800) return 'SUB-TENENTE';
+  if (score >= 600) return 'SARGENTO';
+  if (score >= 400) return 'CABO';
+  if (score >= 200) return 'SOLDADO';
   return 'RECRUTA';
 };
 
@@ -64,8 +69,9 @@ export const INITIAL_OPERATION: OperationEvent = {
   ]
 };
 
+// Fix: Added required 'deviceId' property to match the Operator interface definition in types.ts
 export const MOCK_RANKING: Operator[] = [
-  { id: 'opt-01', callsign: 'GHOST', rank: getRankByScore(1250), score: 1250, status: 'ONLINE' },
-  { id: 'opt-02', callsign: 'VIPER', rank: getRankByScore(980), score: 980, status: 'ONLINE' },
-  { id: 'opt-03', callsign: 'REAPER', rank: getRankByScore(1420), score: 1420, status: 'KIA' }
+  { id: 'opt-01', callsign: 'GHOST', rank: getRankByScore(1250), score: 1250, status: 'ONLINE', deviceId: 'MOCK-DEV-01' },
+  { id: 'opt-02', callsign: 'VIPER', rank: getRankByScore(980), score: 980, status: 'ONLINE', deviceId: 'MOCK-DEV-02' },
+  { id: 'opt-03', callsign: 'REAPER', rank: getRankByScore(1420), score: 1420, status: 'KIA', deviceId: 'MOCK-DEV-03' }
 ];

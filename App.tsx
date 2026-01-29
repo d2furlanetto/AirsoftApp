@@ -3,7 +3,7 @@ import React from 'react';
 import { Header } from './components/Header';
 import { OperatorDashboard } from './views/OperatorDashboard';
 import { AdminDashboard } from './views/AdminDashboard';
-import { Shield, Users, Activity, LogOut, X, Loader2, AlertTriangle } from 'lucide-react';
+import { Shield, Users, Activity, LogOut, X, Loader2, AlertTriangle, MonitorX } from 'lucide-react';
 import { INITIAL_OPERATION, getRankByScore } from './constants';
 import { OperationEvent, MissionStatus, Operator, Mission, MissionProgress } from './types';
 import { TacticalButton } from './components/TacticalButton';
@@ -24,6 +24,16 @@ const {
 } = firestoreModule as any;
 
 const BATCH_LIMIT = 500;
+
+// Gera ou recupera um ID único para este dispositivo/navegador
+const getDeviceId = () => {
+  let id = localStorage.getItem('COMANDOS_DEVICE_ID');
+  if (!id) {
+    id = 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+    localStorage.setItem('COMANDOS_DEVICE_ID', id);
+  }
+  return id;
+};
 
 const cleanData = (obj: any): any => {
   if (Array.isArray(obj)) {
@@ -46,12 +56,14 @@ const App: React.FC = () => {
   const [ranking, setRanking] = React.useState<Operator[]>([]);
   const [isSyncing, setIsSyncing] = React.useState(true);
   const [initError, setInitError] = React.useState<string | null>(null);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
   
   const [showPasswordModal, setShowPasswordModal] = React.useState(false);
   const [adminPassword, setAdminPassword] = React.useState('');
   const [passwordError, setPasswordError] = React.useState(false);
 
   const currentOperator = ranking.find(op => op.id === callsign);
+  const deviceId = getDeviceId();
 
   /**
    * MONITOR DE SESSÃO TÁTICA
@@ -119,14 +131,16 @@ const App: React.FC = () => {
 
   /**
    * RESET TÁTICO DE PARTIDA
-   * Restaura missões padrão e remove todos os operadores, zerando pontos e progresso.
+   * Preserva as missões configuradas pelo admin, mas remove todos os operadores, 
+   * zerando pontos e progresso global. Isso libera os callsigns para novos dispositivos.
    */
   const handleResetMatch = async () => {
     const confirmation = window.confirm(
       "PROTOCOLOS DE COMANDO: CONFIRMAR REINICIALIZAÇÃO DA PARTIDA?\n\n" +
-      "1. Todos os pontos de operadores serão ZERADOS.\n" +
-      "2. O status de todas as missões voltará ao ORIGINAL.\n" +
-      "3. Todos os operadores ativos serão DESLOGADOS."
+      "1. Todos os pontos e progresso dos operadores serão ZERADOS.\n" +
+      "2. O VÍNCULO DE APARELHOS será removido.\n" +
+      "3. As MISSÕES CRIADAS serão MANTIDAS.\n" +
+      "4. Todos os operadores ativos serão DESLOGADOS."
     );
 
     if (!confirmation) return;
@@ -134,10 +148,10 @@ const App: React.FC = () => {
     try {
       setIsSyncing(true);
       
-      // 1. Resetar Operação (Missões, Mapas, etc)
-      await setDoc(doc(db, "operations", "op-001"), cleanData(INITIAL_OPERATION));
+      await updateDoc(doc(db, "operations", "op-001"), {
+        isActive: true,
+      });
       
-      // 2. Limpar todos os operadores do banco
       const opsToDelete = [...ranking];
       if (opsToDelete.length > 0) {
         for (let i = 0; i < opsToDelete.length; i += BATCH_LIMIT) {
@@ -150,7 +164,7 @@ const App: React.FC = () => {
         }
       }
       
-      alert("HQ: REINICIALIZAÇÃO CONCLUÍDA. SISTEMA EM ESTADO INICIAL.");
+      alert("HQ: PARTIDA REINICIADA. CONFIGURAÇÕES DE MISSÃO PRESERVADAS.");
     } catch (err: unknown) {
       console.error("Erro no Reset:", err);
       alert("FALHA CRÍTICA NO RESET DA PARTIDA.");
@@ -200,25 +214,40 @@ const App: React.FC = () => {
     const trimmedInput = userInput.trim().toUpperCase();
     if (!trimmedInput) return;
     setIsSyncing(true);
+    setLoginError(null);
+
     try {
       const opRef = doc(db, "ranking", trimmedInput);
       const opSnap = await getDoc(opRef);
+      
       if (!opSnap.exists()) {
+        // Novo Operador: Vincula o Callsign a este dispositivo
         await setDoc(opRef, cleanData({ 
           id: trimmedInput, 
           callsign: trimmedInput, 
           rank: getRankByScore(0), 
           score: 0, 
           status: 'ONLINE',
+          deviceId: deviceId, // Vínculo de terminal
           missionsProgress: {} 
         }));
       } else {
+        const opData = opSnap.data() as Operator;
+        
+        // Validação de Dispositivo: Verifica se é o mesmo aparelho que registrou o callsign
+        if (opData.deviceId && opData.deviceId !== deviceId) {
+          setLoginError("TERMINAL BLOQUEADO: CALLSIGN JÁ VINCULADO A OUTRO DISPOSITIVO.");
+          setIsSyncing(false);
+          return;
+        }
+
         await updateDoc(opRef, { status: 'ONLINE' });
       }
+      
       setCallsign(trimmedInput);
       setView('operator');
     } catch (err) {
-      alert("ERRO DE LOGIN.");
+      alert("ERRO DE CONEXÃO COM HQ.");
     } finally {
       setIsSyncing(false);
     }
@@ -259,8 +288,18 @@ const App: React.FC = () => {
           <h1 className="font-orbitron text-5xl font-black tracking-tighter amber-glow italic uppercase">COMANDOS</h1>
           <p className="text-[10px] opacity-40 uppercase tracking-[0.3em]">Tactical Field Management v4.2</p>
         </div>
+        
         <div className="w-full max-w-xs space-y-6">
-          <input type="text" value={userInput} onChange={(e) => setUserInput(e.target.value)} placeholder="CALLSIGN" className="w-full bg-black/40 military-border p-5 text-center text-amber font-mono text-xl uppercase focus:outline-none" onKeyDown={(e) => e.key === 'Enter' && handleOperatorLogin()}/>
+          <div className="space-y-2">
+            <input type="text" value={userInput} onChange={(e) => { setUserInput(e.target.value); setLoginError(null); }} placeholder="CALLSIGN" className={`w-full bg-black/40 military-border p-5 text-center text-amber font-mono text-xl uppercase focus:outline-none transition-all ${loginError ? 'border-red-600 bg-red-950/10' : ''}`} onKeyDown={(e) => e.key === 'Enter' && handleOperatorLogin()}/>
+            {loginError && (
+              <div className="flex items-center gap-2 p-3 bg-red-950/20 border border-red-900/40 text-red-500 text-[9px] font-black uppercase tracking-tight animate-in fade-in slide-in-from-top-2">
+                <MonitorX size={14} />
+                <span>{loginError}</span>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <button onClick={handleOperatorLogin} className="military-border p-6 flex flex-col items-center gap-3 bg-amber/5 hover:bg-amber/10 transition-all">
               <Users size={36} className="text-amber" />
@@ -271,7 +310,12 @@ const App: React.FC = () => {
               <span className="font-orbitron font-black text-[10px] tracking-widest uppercase">Admin</span>
             </button>
           </div>
+          
+          <div className="text-center">
+            <p className="text-[8px] opacity-20 font-mono uppercase tracking-widest">Device Hash: {deviceId}</p>
+          </div>
         </div>
+
         {showPasswordModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
             <div className={`w-full max-w-sm military-border bg-black p-6 space-y-6 ${passwordError ? 'border-red-600 shake' : 'border-amber'}`}>
