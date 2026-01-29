@@ -1,0 +1,8 @@
+{
+  "name": "COMANDOS - Tactical Airsoft",
+  "description": "Interface Tática Militar para gerenciamento de missões Airsoft em tempo real via Firebase.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
